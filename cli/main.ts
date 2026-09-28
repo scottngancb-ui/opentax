@@ -12,6 +12,7 @@ import { graphViewCommand } from "./commands/graph.ts";
 import { nodeInspectCommand, nodeListCommand } from "./commands/node.ts";
 import { createReturnCommand, getReturnCommand } from "./commands/return.ts";
 import { exportMefCommand, exportPdfCommand } from "./commands/export.ts";
+import { exploreCommand } from "./commands/explore.ts";
 import { validateReturnCommand } from "./commands/validate.ts";
 import {
   checkForUpdate,
@@ -108,6 +109,35 @@ const COMMANDS: readonly CommandDef[] = [
     handler: async (args) => {
       const returnId = requireArg("returnId", args.returnId);
       await run(() => getReturnCommand({ returnId, baseDir: RETURNS_DIR }));
+    },
+  },
+  {
+    cmd: "return",
+    sub: "explore",
+    description: "Write an interactive HTML page showing how every line was derived",
+    usage:
+      "opentax return explore (--returnId <id> | --case <benchmark-case-dir>) [--output <path>]",
+    options: [
+      { flag: "--returnId", description: "Return identifier" },
+      { flag: "--case", description: "Benchmark case directory containing input.json" },
+      {
+        flag: "--output",
+        description: "HTML file path (default: returns/<id>/explore.html or .state/explore/<case>.html)",
+      },
+    ],
+    handler: async (args) => {
+      if (!args.returnId && !args.case) {
+        console.error("Error: --returnId or --case is required");
+        Deno.exit(1);
+      }
+      await run(() =>
+        exploreCommand({
+          returnId: args.returnId,
+          caseDir: args.case,
+          baseDir: RETURNS_DIR,
+          outputPath: args.output,
+        })
+      );
     },
   },
   {
@@ -370,6 +400,7 @@ async function main(): Promise<void> {
       "entryId",
       "format",
       "output",
+      "case",
     ],
     boolean: ["json", "help", "draft"],
     alias: { h: "help" },
