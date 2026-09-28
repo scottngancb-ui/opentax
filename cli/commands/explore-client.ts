@@ -5,9 +5,12 @@
 // announces itself ("opentax-engine-ready") it enables editing: every change
 // re-runs the engine and rebuilds the model, graph, lines and inspector.
 
+import { LAYOUT_SCRIPT } from "./graph-layout.ts";
+
 export const CLIENT_SCRIPT = `
 (function () {
   "use strict";
+${LAYOUT_SCRIPT}
   var ORIG = JSON.parse(document.getElementById("trace-data").textContent);
   var formsEl = document.getElementById("forms-data");
   var FORM_DOCS = formsEl ? JSON.parse(formsEl.textContent) : {};
@@ -57,50 +60,11 @@ export const CLIENT_SCRIPT = `
     return m;
   }
 
-  // Layered left-to-right layout: column = longest path from the start node,
-  // rows ordered by alternating barycenter sweeps to reduce crossings.
-  var NW = 158, NH = 42, CG = 62, RG = 14, PAD = 16;
   function layout(m) {
-    var layer = {};
-    m.order.forEach(function (n) {
-      var l = 0;
-      (m.preds[n] || []).forEach(function (p) { if (layer[p] !== undefined) l = Math.max(l, layer[p] + 1); });
-      layer[n] = l;
-    });
-    var nLayers = 0;
-    m.order.forEach(function (n) { nLayers = Math.max(nLayers, layer[n] + 1); });
-    var cols = [];
-    for (var i = 0; i < nLayers; i++) cols.push([]);
-    m.order.forEach(function (n) { cols[layer[n]].push(n); });
-    var pos = {};
-    function place(c) { c.forEach(function (n, k) { pos[n] = c.length > 1 ? k / (c.length - 1) : 0.5; }); }
-    function bary(list) {
-      if (!list || !list.length) return null;
-      return list.reduce(function (s, p) { return s + pos[p]; }, 0) / list.length;
-    }
-    cols.forEach(place);
-    for (var pass = 0; pass < 6; pass++) {
-      var down = pass % 2 === 0;
-      for (var s = 0; s < cols.length; s++) {
-        var c = cols[down ? s : cols.length - 1 - s];
-        var score = {};
-        c.forEach(function (n) {
-          var b = bary(down ? m.preds[n] : m.succs[n]);
-          score[n] = b === null ? pos[n] : b;
-        });
-        c.sort(function (a, b) { return score[a] - score[b]; });
-        place(c);
-      }
-    }
-    var maxRows = cols.reduce(function (mx, c) { return Math.max(mx, c.length); }, 0);
-    m.W = PAD * 2 + nLayers * NW + Math.max(0, nLayers - 1) * CG;
-    m.H = PAD * 2 + maxRows * NH + Math.max(0, maxRows - 1) * RG;
-    m.xy = {};
-    cols.forEach(function (c, j) {
-      var colH = c.length * NH + (c.length - 1) * RG;
-      var top = PAD + (m.H - PAD * 2 - colH) / 2;
-      c.forEach(function (n, k) { m.xy[n] = { x: PAD + j * (NW + CG), y: top + k * (NH + RG) }; });
-    });
+    var g = layeredLayout(m.order, m.preds, m.succs);
+    m.xy = g.xy;
+    m.W = g.W;
+    m.H = g.H;
   }
 
   // ---------- formatting ----------
@@ -251,9 +215,8 @@ export const CLIENT_SCRIPT = `
     Object.keys(M.edges).forEach(function (key) {
       var e = M.edges[key], a = M.xy[e.from], b = M.xy[e.to];
       if (!a || !b) return;
-      var x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x - 2, y2 = b.y + NH / 2, c = Math.max(24, (x2 - x1) / 2);
       var fields = Object.keys(e.fields).map(fieldLabel).join(", ");
-      svg.push('<path class="edge" data-from="' + esc(e.from) + '" data-to="' + esc(e.to) + '" marker-end="url(#arr)" d="M' + x1 + " " + y1 + " C" + (x1 + c) + " " + y1 + " " + (x2 - c) + " " + y2 + " " + x2 + " " + y2 + '"><title>' +
+      svg.push('<path class="edge" data-from="' + esc(e.from) + '" data-to="' + esc(e.to) + '" marker-end="url(#arr)" d="' + edgePath(a, b) + '"><title>' +
         esc(nodeLabel(e.from) + " → " + nodeLabel(e.to) + ": " + fields) + "</title></path>");
     });
     M.order.forEach(function (n) {

@@ -95,6 +95,34 @@ tr.cap td { padding-top: 2px; padding-bottom: 2px; padding-left: calc(8px + var(
 .opts dd { margin: 0; color: var(--ink-2); }
 .opt-wrap { margin-top: 6px; }
 .opt-wrap summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+.dtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: -8px; }
+.dtab { border: 0; border-bottom: 2px solid transparent; background: none; padding: 8px 12px; font: 600 15px/1.3 var(--cond); color: var(--ink-2); cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.dtab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.dtab:focus-visible, .node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.map { display: grid; gap: 10px; }
+.map-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.hint-line { margin: 0; font-size: 13px; color: var(--ink-2); }
+.map-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--rule); background: var(--sunk); }
+svg.flow-map { display: block; }
+.flow-map .edge { fill: none; stroke: var(--edge); stroke-width: 1.2; }
+.flow-map .edge.on { stroke: var(--accent); stroke-width: 2; }
+.flow-map .arrow { fill: var(--edge); }
+.flow-map .arrow-on { fill: var(--accent); }
+.flow-map .node { cursor: pointer; }
+.flow-map .node rect { stroke-width: 1; }
+.flow-map .node text { font-family: var(--cond); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.flow-map .node text.id { font-family: var(--sans); font-size: 10px; font-weight: 400; fill: var(--ink-2); }
+.flow-map .k-input rect { fill: var(--entry-soft); stroke: var(--entry); }
+.flow-map .k-computed rect { fill: var(--accent-soft); stroke: var(--accent); }
+.flow-map .k-result rect { fill: var(--result-bg); stroke: var(--result-bg); }
+.flow-map .k-result text, .flow-map .k-result text.id { fill: var(--result-ink); }
+.flow-map .node.unrun rect { stroke: var(--bad); stroke-dasharray: 4 2; }
+.flow-map .node.sel rect { stroke-width: 3; }
+.flow-map .node:hover rect { stroke-width: 2; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .mark { margin: 0; grid-row: auto; }
+.mark.unrun-mark { background: var(--surface); border: 1px dashed var(--bad); }
 footer { color: var(--ink-3); font-size: 12px; }
 kbd { font: 11px var(--mono); border: 1px solid var(--rule); padding: 0 4px; }
 `;

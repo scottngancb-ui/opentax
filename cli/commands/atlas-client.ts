@@ -1,9 +1,12 @@
 // Browser script for the forms atlas page. Plain ES5-style JS inside a TS string:
 // no template literals, so it can live in this template string untouched.
 
+import { LAYOUT_SCRIPT } from "./graph-layout.ts";
+
 export const ATLAS_SCRIPT = `
 (function () {
   "use strict";
+${LAYOUT_SCRIPT}
   var DATA = JSON.parse(document.getElementById("atlas-data").textContent);
   var FORMS = DATA.forms;
   var BY = {};
@@ -20,7 +23,14 @@ export const ATLAS_SCRIPT = `
   function load(key, fallback) { try { var v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; } }
   function save(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ } }
 
-  var state = { sel: null, q: "", kind: load("opentax-atlas-kind", "all") };
+  var DEPTHS = [["1", "1 step"], ["2", "2 steps"], ["3", "3 steps"], ["all", "Full chain"]];
+  var state = {
+    sel: null,
+    q: "",
+    kind: load("opentax-atlas-kind", "all"),
+    tab: load("opentax-atlas-tab", "fields"),
+    depth: load("opentax-atlas-depth", "1")
+  };
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
@@ -167,23 +177,81 @@ export const ATLAS_SCRIPT = `
   function countFields(fields) {
     return fields.reduce(function (n, f) { return n + 1 + (f.children ? countFields(f.children) : 0); }, 0);
   }
-  function renderDetail() {
-    var f = BY[state.sel];
-    var el = document.getElementById("detail");
-    if (!f) { el.innerHTML = '<p class="empty">Pick a form from the list.</p>'; return; }
-    var hits = fieldMatches(f, terms());
+  // ---------- map ----------
+  // Forms reachable from start in up to depth steps along next().
+  function reach(start, next, depth) {
+    var seen = {}, frontier = [start], d = 0;
+    while (frontier.length && d < depth) {
+      var nf = [];
+      frontier.forEach(function (n) {
+        next(n).forEach(function (m) { if (!seen[m] && m !== start) { seen[m] = true; nf.push(m); } });
+      });
+      frontier = nf;
+      d++;
+    }
+    return seen;
+  }
+  function neighborhood(t, depth) {
+    var limit = depth === "all" ? Infinity : +depth;
+    var up = reach(t, function (n) { return BY[n].fedBy; }, limit);
+    var down = reach(t, function (n) { return BY[n].feeds; }, limit);
+    up[t] = true;
+    down[t] = true;
+    // Keep edges that run along the upstream side or the downstream side.
+    var edges = [];
+    Object.keys(up).concat(Object.keys(down)).forEach(function (a, i, all) {
+      if (all.indexOf(a) !== i) return;
+      BY[a].feeds.forEach(function (b) {
+        if ((up[a] && up[b]) || (down[a] && down[b])) edges.push([a, b]);
+      });
+    });
+    var nodes = Object.keys(up).concat(Object.keys(down).filter(function (n) { return !up[n]; }));
+    nodes.sort(function (a, b) { return BY[a].title.localeCompare(BY[b].title, "en", { numeric: true }); });
+    return { nodes: nodes, edges: edges, up: Object.keys(up).length - 1, down: Object.keys(down).length - 1 };
+  }
+  function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+  function mapSvg(t, hood) {
+    var preds = {}, succs = {};
+    hood.edges.forEach(function (e) {
+      (succs[e[0]] = succs[e[0]] || []).push(e[1]);
+      (preds[e[1]] = preds[e[1]] || []).push(e[0]);
+    });
+    var g = layeredLayout(hood.nodes, preds, succs);
+    var out = ['<svg class="flow-map" width="' + g.W + '" height="' + g.H + '" viewBox="0 0 ' + g.W + " " + g.H + '" role="img" aria-label="' + esc("Forms connected to " + BY[t].title) + '">',
+      '<defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow" d="M0,0 L8,4 L0,8 z"/></marker>' +
+      '<marker id="arr-on" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow-on" d="M0,0 L8,4 L0,8 z"/></marker></defs>'];
+    hood.edges.forEach(function (e) {
+      var on = e[0] === t || e[1] === t;
+      out.push('<path class="edge' + (on ? " on" : "") + '" marker-end="url(#' + (on ? "arr-on" : "arr") + ')" d="' + edgePath(g.xy[e[0]], g.xy[e[1]]) + '"><title>' +
+        esc(BY[e[0]].title + " → " + BY[e[1]].title) + "</title></path>");
+    });
+    hood.nodes.forEach(function (n) {
+      var f = BY[n], p = g.xy[n];
+      out.push('<g class="node ' + kindClass(f) + (n === t ? " sel" : "") + (f.reachable ? "" : " unrun") + '" data-form="' + esc(n) + '" tabindex="0" role="button" aria-label="' + esc(f.title) + '" transform="translate(' + p.x + "," + p.y + ')">' +
+        '<rect width="' + NW + '" height="' + NH + '" rx="2"/>' +
+        '<text x="10" y="18">' + esc(trunc(f.title, 21)) + "</text>" +
+        '<text class="id" x="10" y="33">' + esc(trunc(f.subtitle || n, 25)) + "</text>" +
+        "<title>" + esc(f.title + (f.subtitle ? " — " + f.subtitle : "") + (f.reachable ? "" : " (not connected yet)")) + "</title></g>");
+    });
+    out.push("</svg>");
+    return out.join("");
+  }
+  function mapHtml(f) {
+    var hood = neighborhood(f.nodeType, state.depth);
+    return '<section class="map">' +
+      '<div class="map-bar"><div class="segs" role="group" aria-label="How far to follow connections">' +
+        DEPTHS.map(function (d) { return '<button type="button" class="seg" data-depth="' + d[0] + '" aria-pressed="' + (state.depth === d[0]) + '">' + esc(d[1]) + "</button>"; }).join("") +
+      '</div><p class="hint-line">' + hood.up + (hood.up === 1 ? " form feeds" : " forms feed") + " into " + esc(f.title) + " and " + hood.down + (hood.down === 1 ? " form is" : " forms are") +
+        " fed by it, within " + (state.depth === "all" ? "the full chain" : state.depth + (state.depth === "1" ? " step" : " steps")) + ". Click a box to recenter.</p></div>" +
+      '<div class="map-wrap">' + mapSvg(f.nodeType, hood) + "</div>" +
+      '<div class="legend"><span><i class="mark k-input"></i>You enter</span><span><i class="mark k-computed"></i>Computed</span><span><i class="mark k-result"></i>Form 1040</span><span><i class="mark unrun-mark"></i>Not connected yet</span></div>' +
+    "</section>";
+  }
+
+  function fieldsHtml(f, hits) {
     var fedEmpty = f.kind === "input" ? "Nothing. You enter it from your own documents." : "No other form sends data here.";
     var feedEmpty = "Nothing. It is the end of the line.";
-    el.innerHTML =
-      '<div class="d-head">' +
-        '<div class="d-meta"><span class="pill ' + kindClass(f) + '">' + esc(KIND_LABEL[f.kind] || f.kind) + '</span><span class="eyebrow">' + esc(f.topic) + "</span></div>" +
-        "<h2>" + esc(f.title) + "</h2>" +
-        (f.subtitle ? '<p class="d-sub">' + esc(f.subtitle) + "</p>" : "") +
-        '<p class="d-sum">' + esc(f.summary) + "</p>" +
-        '<p class="d-entry">' + esc(ENTRY_NOTE[f.entry] || "") + ' <code class="fkey">' + esc(f.nodeType) + "</code></p>" +
-        (f.reachable ? "" : '<p class="notice">Not connected yet: no form in the engine sends data here, so this form never runs in a calculation.</p>') +
-      "</div>" +
-      '<div class="flow">' +
+    return '<div class="flow">' +
         '<section><h3>Gets data from <span class="n">' + f.fedBy.length + "</span></h3>" + linkList(f.fedBy, fedEmpty) + "</section>" +
         '<div class="flow-mid" aria-hidden="true"><span class="chip ' + kindClass(f) + '">' + esc(f.title) + "</span></div>" +
         '<section><h3>Sends data to <span class="n">' + f.feeds.length + "</span></h3>" + linkList(f.feeds, feedEmpty) + "</section>" +
@@ -196,7 +264,39 @@ export const ATLAS_SCRIPT = `
             fieldRows(f.fields, "", 0, hits) + "</tbody></table></div>"
           : '<p class="empty">This form has no fields of its own.</p>') +
       "</section>";
+  }
 
+  function renderDetail() {
+    var f = BY[state.sel];
+    var el = document.getElementById("detail");
+    if (!f) { el.innerHTML = '<p class="empty">Pick a form from the list.</p>'; return; }
+    var hits = fieldMatches(f, terms());
+    var tabs = [["fields", "Fields"], ["map", "Map"]];
+    el.innerHTML =
+      '<div class="d-head">' +
+        '<div class="d-meta"><span class="pill ' + kindClass(f) + '">' + esc(KIND_LABEL[f.kind] || f.kind) + '</span><span class="eyebrow">' + esc(f.topic) + "</span></div>" +
+        "<h2>" + esc(f.title) + "</h2>" +
+        (f.subtitle ? '<p class="d-sub">' + esc(f.subtitle) + "</p>" : "") +
+        '<p class="d-sum">' + esc(f.summary) + "</p>" +
+        '<p class="d-entry">' + esc(ENTRY_NOTE[f.entry] || "") + ' <code class="fkey">' + esc(f.nodeType) + "</code></p>" +
+        (f.reachable ? "" : '<p class="notice">Not connected yet: no form in the engine sends data here, so this form never runs in a calculation.</p>') +
+      "</div>" +
+      '<div class="dtabs" role="tablist" aria-label="Form views">' + tabs.map(function (tb) {
+        return '<button type="button" role="tab" class="dtab" data-tab="' + tb[0] + '" aria-selected="' + (state.tab === tb[0]) + '">' + esc(tb[1]) +
+          (tb[0] === "fields" ? ' <span class="n">' + countFields(f.fields) + "</span>" : "") + "</button>";
+      }).join("") + "</div>" +
+      '<div role="tabpanel">' + (state.tab === "map" ? mapHtml(f) : fieldsHtml(f, hits)) + "</div>";
+    if (state.tab === "map") centerMap();
+  }
+  // Scroll the map box so the selected form is in view.
+  function centerMap() {
+    var wrap = document.querySelector(".map-wrap");
+    var sel = wrap && wrap.querySelector(".node.sel");
+    if (!sel) return;
+    var m = /translate\\(([\\d.]+),([\\d.]+)\\)/.exec(sel.getAttribute("transform") || "");
+    if (!m) return;
+    wrap.scrollLeft = Math.max(0, +m[1] + NW / 2 - wrap.clientWidth / 2);
+    wrap.scrollTop = Math.max(0, +m[2] + NH / 2 - wrap.clientHeight / 2);
   }
 
   function select(t, push) {
@@ -249,18 +349,34 @@ export const ATLAS_SCRIPT = `
     }, 120);
   });
   document.addEventListener("click", function (ev) {
-    var t = ev.target.closest("[data-form], [data-kind]");
+    var t = ev.target.closest("[data-form], [data-kind], [data-tab], [data-depth]");
     if (!t) return;
+    if (t.hasAttribute("data-tab")) {
+      state.tab = t.getAttribute("data-tab");
+      save("opentax-atlas-tab", state.tab);
+      return renderDetail();
+    }
+    if (t.hasAttribute("data-depth")) {
+      state.depth = t.getAttribute("data-depth");
+      save("opentax-atlas-depth", state.depth);
+      return renderDetail();
+    }
     if (t.hasAttribute("data-kind")) {
       state.kind = t.getAttribute("data-kind");
       save("opentax-atlas-kind", state.kind);
       renderFilters();
       return renderList();
     }
+    var inMap = !!t.closest(".map-wrap");
     select(t.getAttribute("data-form"), true);
-    if (t.closest("#detail") || narrow()) document.getElementById("detail").scrollIntoView({ block: "start" });
+    if (!inMap && (t.closest("#detail") || narrow())) document.getElementById("detail").scrollIntoView({ block: "start" });
   });
   document.addEventListener("keydown", function (ev) {
+    var g = ev.target.closest && ev.target.closest(".map-wrap [data-form]");
+    if (g && (ev.key === "Enter" || ev.key === " ")) {
+      ev.preventDefault();
+      return select(g.getAttribute("data-form"), true);
+    }
     if (ev.key === "/" && document.activeElement !== document.getElementById("q")) {
       ev.preventDefault();
       document.getElementById("q").focus();
@@ -270,6 +386,8 @@ export const ATLAS_SCRIPT = `
   window.addEventListener("hashchange", function () { var t = fromHash(); if (t && t !== state.sel) select(t, false); });
 
   if (!FILTERS.some(function (f) { return f[0] === state.kind; })) state.kind = "all";
+  if (state.tab !== "fields" && state.tab !== "map") state.tab = "fields";
+  if (!DEPTHS.some(function (d) { return d[0] === state.depth; })) state.depth = "1";
   renderStats();
   renderFilters();
   select(fromHash() || (BY[DATA.formType] ? DATA.formType : FORMS[0].nodeType), false);
