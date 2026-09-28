@@ -76,7 +76,9 @@ Deno.test("atlasCommand writes the atlas page", async () => {
   try {
     const result = await atlasCommand({ outputPath: `${dir}/atlas.html` });
     assertEquals(result.forms, atlas.forms.length);
-    assertStringIncludes(await Deno.readTextFile(result.output), "Forms Atlas");
+    const html = await Deno.readTextFile(result.output);
+    assertStringIncludes(html, "Forms Atlas");
+    assertStringIncludes(html, '<dialog class="peek" id="peek"');
   } finally {
     await Deno.remove(dir, { recursive: true });
   }
