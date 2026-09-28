@@ -242,7 +242,7 @@ ${LAYOUT_SCRIPT}
       '<div class="map-bar"><div class="segs" role="group" aria-label="How far to follow connections">' +
         DEPTHS.map(function (d) { return '<button type="button" class="seg" data-depth="' + d[0] + '" aria-pressed="' + (state.depth === d[0]) + '">' + esc(d[1]) + "</button>"; }).join("") +
       '</div><p class="hint-line">' + hood.up + (hood.up === 1 ? " form feeds" : " forms feed") + " into " + esc(f.title) + " and " + hood.down + (hood.down === 1 ? " form is" : " forms are") +
-        " fed by it, within " + (state.depth === "all" ? "the full chain" : state.depth + (state.depth === "1" ? " step" : " steps")) + ". Click a box to recenter.</p></div>" +
+        " fed by it, within " + (state.depth === "all" ? "the full chain" : state.depth + (state.depth === "1" ? " step" : " steps")) + ". Click any other box for a quick look without leaving " + esc(f.title) + ".</p></div>" +
       '<div class="map-wrap">' + mapSvg(f.nodeType, hood) + "</div>" +
       '<div class="legend"><span><i class="mark k-input"></i>You enter</span><span><i class="mark k-computed"></i>Computed</span><span><i class="mark k-result"></i>Form 1040</span><span><i class="mark unrun-mark"></i>Not connected yet</span></div>' +
     "</section>";
@@ -299,6 +299,68 @@ ${LAYOUT_SCRIPT}
     wrap.scrollTop = Math.max(0, +m[2] + NH / 2 - wrap.clientHeight / 2);
   }
 
+  // ---------- quick look (map pop-up) ----------
+  var peekFrom = null;
+  function relationText(sel, t) {
+    var a = BY[sel], b = BY[t];
+    if (a.feeds.indexOf(t) >= 0) return a.title + " sends data directly to " + b.title + ".";
+    if (b.feeds.indexOf(sel) >= 0) return b.title + " sends data directly to " + a.title + ".";
+    return b.title + " connects to " + a.title + " through other forms.";
+  }
+  function openPeek(t, fromEl) {
+    var f = BY[t], dlg = document.getElementById("peek");
+    if (!f || !dlg) return;
+    peekFrom = fromEl || null;
+    document.getElementById("peek-body").innerHTML =
+      '<div class="peek-head">' +
+        '<div class="d-meta"><span class="pill ' + kindClass(f) + '">' + esc(KIND_LABEL[f.kind] || f.kind) + '</span><span class="eyebrow">' + esc(f.topic) + "</span></div>" +
+        '<button type="button" class="peek-x" data-peek-close aria-label="Close">×</button>' +
+      "</div>" +
+      '<div class="peek-scroll">' +
+        '<h3 id="peek-title">' + esc(f.title) + "</h3>" +
+        (f.subtitle ? '<p class="d-sub">' + esc(f.subtitle) + "</p>" : "") +
+        '<p class="peek-rel">' + esc(relationText(state.sel, t)) + "</p>" +
+        '<p class="d-sum">' + esc(f.summary) + "</p>" +
+        '<p class="d-entry">' + esc(ENTRY_NOTE[f.entry] || "") + ' <code class="fkey">' + esc(f.nodeType) + "</code></p>" +
+        (f.reachable ? "" : '<p class="notice">Not connected yet: no form in the engine sends data here, so this form never runs in a calculation.</p>') +
+        '<p class="peek-links">Gets data from ' + f.fedBy.length + (f.fedBy.length === 1 ? " form" : " forms") + " · sends data to " + f.feeds.length + (f.feeds.length === 1 ? " form" : " forms") + "</p>" +
+        '<section class="fields"><h3>' + (f.kind === "input" ? "Fields you fill in" : f.kind === "result" ? "Lines on the return" : "Values it works with") +
+          ' <span class="n">' + countFields(f.fields) + "</span></h3>" +
+          (f.fields.length
+            ? '<div class="tbl-wrap"><table class="ftable"><thead><tr><th>Field</th><th>Type</th><th>What it means</th></tr></thead><tbody>' +
+              fieldRows(f.fields, "", 0, []) + "</tbody></table></div>"
+            : '<p class="empty">This form has no fields of its own.</p>') +
+        "</section>" +
+      "</div>" +
+      '<div class="peek-foot">' +
+        '<button type="button" class="btn primary" data-peek-open="' + esc(t) + '">Open ' + esc(f.title) + "</button>" +
+        '<button type="button" class="btn" data-peek-close>Back to ' + esc(BY[state.sel].title) + "</button>" +
+      "</div>";
+    if (typeof dlg.showModal === "function") {
+      if (!dlg.open) dlg.showModal();
+    } else {
+      dlg.setAttribute("open", "");
+    }
+    var scroller = dlg.querySelector(".peek-scroll");
+    if (scroller) scroller.scrollTop = 0;
+    var close = dlg.querySelector(".peek-x");
+    if (close) close.focus();
+  }
+  function closePeek() {
+    var dlg = document.getElementById("peek");
+    if (!dlg || !dlg.open) return;
+    if (typeof dlg.close === "function") dlg.close(); else dlg.removeAttribute("open");
+  }
+  function onPeekClosed() {
+    if (peekFrom && document.body.contains(peekFrom)) peekFrom.focus();
+    peekFrom = null;
+  }
+  // A box on the map: the selected form does nothing, any other form gets a quick look.
+  function mapNodeActivated(g) {
+    var t = g.getAttribute("data-form");
+    if (t && t !== state.sel) openPeek(t, g);
+  }
+
   function select(t, push) {
     if (!BY[t]) return;
     state.sel = t;
@@ -349,6 +411,19 @@ ${LAYOUT_SCRIPT}
     }, 120);
   });
   document.addEventListener("click", function (ev) {
+    var dlg = document.getElementById("peek");
+    if (dlg && ev.target === dlg) return closePeek();
+    var pk = ev.target.closest("[data-peek-open], [data-peek-close]");
+    if (pk) {
+      if (pk.hasAttribute("data-peek-close")) return closePeek();
+      var target = pk.getAttribute("data-peek-open");
+      peekFrom = null;
+      closePeek();
+      select(target, true);
+      return document.getElementById("detail").scrollIntoView({ block: "start" });
+    }
+    var node = ev.target.closest(".map-wrap [data-form]");
+    if (node) return mapNodeActivated(node);
     var t = ev.target.closest("[data-form], [data-kind], [data-tab], [data-depth]");
     if (!t) return;
     if (t.hasAttribute("data-tab")) {
@@ -367,21 +442,22 @@ ${LAYOUT_SCRIPT}
       renderFilters();
       return renderList();
     }
-    var inMap = !!t.closest(".map-wrap");
     select(t.getAttribute("data-form"), true);
-    if (!inMap && (t.closest("#detail") || narrow())) document.getElementById("detail").scrollIntoView({ block: "start" });
+    if (t.closest("#detail") || narrow()) document.getElementById("detail").scrollIntoView({ block: "start" });
   });
   document.addEventListener("keydown", function (ev) {
     var g = ev.target.closest && ev.target.closest(".map-wrap [data-form]");
     if (g && (ev.key === "Enter" || ev.key === " ")) {
       ev.preventDefault();
-      return select(g.getAttribute("data-form"), true);
+      return mapNodeActivated(g);
     }
     if (ev.key === "/" && document.activeElement !== document.getElementById("q")) {
       ev.preventDefault();
       document.getElementById("q").focus();
     }
   });
+  var peekDlg = document.getElementById("peek");
+  if (peekDlg) peekDlg.addEventListener("close", onPeekClosed);
   window.addEventListener("popstate", function () { var t = fromHash(); if (t) select(t, false); });
   window.addEventListener("hashchange", function () { var t = fromHash(); if (t && t !== state.sel) select(t, false); });
 
