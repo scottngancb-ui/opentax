@@ -307,7 +307,10 @@ ${LAYOUT_SCRIPT}
     if (b.feeds.indexOf(sel) >= 0) return b.title + " sends data directly to " + a.title + ".";
     return b.title + " connects to " + a.title + " through other forms.";
   }
-  function openPeek(t, fromEl) {
+  // context: the form the pop-up is relative to (the selected atlas form), or null
+  // when opened from the situation plan.
+  function openPeek(t, fromEl, context) {
+    if (context === undefined) context = state.sel;
     var f = BY[t], dlg = document.getElementById("peek");
     if (!f || !dlg) return;
     peekFrom = fromEl || null;
@@ -319,7 +322,7 @@ ${LAYOUT_SCRIPT}
       '<div class="peek-scroll">' +
         '<h3 id="peek-title">' + esc(f.title) + "</h3>" +
         (f.subtitle ? '<p class="d-sub">' + esc(f.subtitle) + "</p>" : "") +
-        '<p class="peek-rel">' + esc(relationText(state.sel, t)) + "</p>" +
+        (context ? '<p class="peek-rel">' + esc(relationText(context, t)) + "</p>" : "") +
         '<p class="d-sum">' + esc(f.summary) + "</p>" +
         '<p class="d-entry">' + esc(ENTRY_NOTE[f.entry] || "") + ' <code class="fkey">' + esc(f.nodeType) + "</code></p>" +
         (f.reachable ? "" : '<p class="notice">Not connected yet: no form in the engine sends data here, so this form never runs in a calculation.</p>') +
@@ -334,7 +337,7 @@ ${LAYOUT_SCRIPT}
       "</div>" +
       '<div class="peek-foot">' +
         '<button type="button" class="btn primary" data-peek-open="' + esc(t) + '">Open ' + esc(f.title) + "</button>" +
-        '<button type="button" class="btn" data-peek-close>Back to ' + esc(BY[state.sel].title) + "</button>" +
+        '<button type="button" class="btn" data-peek-close>' + (context ? "Back to " + esc(BY[context].title) : "Close") + "</button>" +
       "</div>";
     if (typeof dlg.showModal === "function") {
       if (!dlg.open) dlg.showModal();
@@ -387,6 +390,97 @@ ${LAYOUT_SCRIPT}
     return BY[t] ? t : null;
   }
 
+  // ---------- situation planner ----------
+  var SITUATIONS = DATA.situations || [];
+  var SIT_BY = {};
+  SITUATIONS.forEach(function (x) { SIT_BY[x.id] = x; });
+  state.picked = load("opentax-atlas-situations", "").split(",").filter(function (id) { return SIT_BY[id]; });
+  var FILER = "general";
+
+  function unique(list) { return list.filter(function (x, i) { return list.indexOf(x) === i && BY[x]; }); }
+  // Shortest chain of forms from start to Form 1040, following where data flows.
+  function pathToReturn(start) {
+    var goal = DATA.formType;
+    if (start === goal) return [goal];
+    var parent = {}, queue = [start];
+    parent[start] = null;
+    while (queue.length) {
+      var n = queue.shift();
+      if (n === goal) break;
+      (BY[n] ? BY[n].feeds : []).forEach(function (m) {
+        if (!(m in parent)) { parent[m] = n; queue.push(m); }
+      });
+    }
+    if (!(goal in parent)) return [start];
+    var path = [];
+    for (var c = goal; c !== null; c = parent[c]) path.unshift(c);
+    return path;
+  }
+  function planFor(ids) {
+    var picked = ids.map(function (id) { return SIT_BY[id]; });
+    var docs = unique([FILER].concat([].concat.apply([], picked.map(function (x) { return x.documents; }))));
+    var extra = unique([].concat.apply([], picked.map(function (x) { return x.forms; }))).filter(function (f) { return docs.indexOf(f) < 0; });
+    var seeds = docs.concat(extra);
+    var onPath = unique([].concat.apply([], seeds.map(pathToReturn)));
+    var nodes = unique(seeds.concat(onPath, [DATA.formType]));
+    var inSet = {};
+    nodes.forEach(function (n) { inSet[n] = true; });
+    var edges = [];
+    nodes.forEach(function (a) { BY[a].feeds.forEach(function (b) { if (inSet[b]) edges.push([a, b]); }); });
+    // The situations' own forms first, then connecting forms, then the return itself.
+    var connectors = onPath.filter(function (n) { return docs.indexOf(n) < 0 && extra.indexOf(n) < 0 && n !== DATA.formType; });
+    var forms = extra.concat(connectors, [DATA.formType]);
+    return { docs: docs, forms: forms, extra: extra, nodes: nodes, edges: edges };
+  }
+  function renderChecks() {
+    var box = document.getElementById("checks");
+    if (!box) return;
+    var groups = [];
+    SITUATIONS.forEach(function (x) { if (groups.indexOf(x.group) < 0) groups.push(x.group); });
+    box.innerHTML = groups.map(function (g) {
+      return '<fieldset class="check-group"><legend class="eyebrow">' + esc(g) + "</legend>" +
+        SITUATIONS.filter(function (x) { return x.group === g; }).map(function (x) {
+          var id = "sit-" + x.id;
+          var docs = x.documents.map(function (d) { return BY[d] ? BY[d].title : d; }).join(" · ");
+          return '<label class="check" for="' + esc(id) + '"><input type="checkbox" id="' + esc(id) + '" data-situation="' + esc(x.id) + '"' +
+            (state.picked.indexOf(x.id) >= 0 ? " checked" : "") + ">" +
+            '<span class="check-text"><span class="check-label">' + esc(x.label) + '</span><span class="check-detail">' + esc(x.detail) + '</span><span class="check-docs">' + esc(docs) + "</span></span></label>";
+        }).join("") + "</fieldset>";
+    }).join("");
+  }
+  function docRow(t) {
+    var f = BY[t];
+    return '<li><button type="button" class="doc-row" data-peek-form="' + esc(t) + '"><i class="mark ' + kindClass(f) + '" aria-hidden="true"></i>' +
+      '<span class="it-title">' + esc(f.title) + '</span><span class="it-sub">' + esc(f.subtitle || t) + "</span></button></li>";
+  }
+  function renderPlan() {
+    var el = document.getElementById("plan");
+    if (!el) return;
+    if (!state.picked.length) {
+      el.innerHTML = '<p class="plan-empty">Check what applies above. The documents you need and the forms they flow into will appear here, with a map of how they connect to ' + esc(BY[DATA.formType].title) + ".</p>";
+      return;
+    }
+    var p = planFor(state.picked);
+    el.innerHTML =
+      '<div class="plan-head"><p class="plan-count"><strong>' + p.docs.length + "</strong> " + (p.docs.length === 1 ? "document or entry" : "documents and entries") +
+        " to gather · <strong>" + p.forms.length + "</strong> " + (p.forms.length === 1 ? "form comes" : "forms come") + " into play</p>" +
+        '<button type="button" class="btn" id="plan-clear">Clear checklist</button></div>' +
+      '<div class="plan-cols">' +
+        '<section><h3 class="plan-h">Documents to gather</h3><p class="plan-note">What you receive or fill in. The Form 1040 header (names, filing status) is always needed.</p><ul class="doc-list">' + p.docs.map(docRow).join("") + "</ul></section>" +
+        '<section><h3 class="plan-h">Forms that come into play</h3><p class="plan-note">Filled in from your documents on the way to ' + esc(BY[DATA.formType].title) + '.</p><ul class="doc-list">' + p.forms.map(docRow).join("") + "</ul></section>" +
+      "</div>" +
+      '<section class="map plan-map"><h3 class="plan-h">How they connect</h3>' +
+        '<p class="hint-line">Arrows show where each form sends its numbers. Click a box for a quick look.</p>' +
+        '<div class="map-wrap">' + mapSvg(DATA.formType, p) + "</div>" +
+        '<div class="legend"><span><i class="mark k-input"></i>You enter</span><span><i class="mark k-computed"></i>Computed</span><span><i class="mark k-result"></i>' + esc(BY[DATA.formType].title) + '</span><span><i class="mark unrun-mark"></i>Not connected yet</span></div>' +
+      "</section>";
+  }
+  function setPicked(ids) {
+    state.picked = ids;
+    save("opentax-atlas-situations", ids.join(","));
+    renderPlan();
+  }
+
   // ---------- header ----------
   function renderStats() {
     var inputs = FORMS.filter(function (f) { return f.kind === "input"; }).length;
@@ -422,6 +516,12 @@ ${LAYOUT_SCRIPT}
       select(target, true);
       return document.getElementById("detail").scrollIntoView({ block: "start" });
     }
+    var planNode = ev.target.closest(".plan [data-form], [data-peek-form]");
+    if (planNode) return openPeek(planNode.getAttribute("data-form") || planNode.getAttribute("data-peek-form"), planNode, null);
+    if (ev.target.closest("#plan-clear")) {
+      setPicked([]);
+      return renderChecks();
+    }
     var node = ev.target.closest(".map-wrap [data-form]");
     if (node) return mapNodeActivated(node);
     var t = ev.target.closest("[data-form], [data-kind], [data-tab], [data-depth]");
@@ -449,12 +549,19 @@ ${LAYOUT_SCRIPT}
     var g = ev.target.closest && ev.target.closest(".map-wrap [data-form]");
     if (g && (ev.key === "Enter" || ev.key === " ")) {
       ev.preventDefault();
-      return mapNodeActivated(g);
+      return g.closest(".plan") ? openPeek(g.getAttribute("data-form"), g, null) : mapNodeActivated(g);
     }
     if (ev.key === "/" && document.activeElement !== document.getElementById("q")) {
       ev.preventDefault();
       document.getElementById("q").focus();
     }
+  });
+  document.addEventListener("change", function (ev) {
+    var id = ev.target.getAttribute && ev.target.getAttribute("data-situation");
+    if (!id) return;
+    var next = state.picked.filter(function (x) { return x !== id; });
+    if (ev.target.checked) next.push(id);
+    setPicked(SITUATIONS.map(function (x) { return x.id; }).filter(function (x) { return next.indexOf(x) >= 0; }));
   });
   var peekDlg = document.getElementById("peek");
   if (peekDlg) peekDlg.addEventListener("close", onPeekClosed);
@@ -465,6 +572,10 @@ ${LAYOUT_SCRIPT}
   if (state.tab !== "fields" && state.tab !== "map") state.tab = "fields";
   if (!DEPTHS.some(function (d) { return d[0] === state.depth; })) state.depth = "1";
   renderStats();
+  var planner = document.getElementById("planner");
+  if (planner) planner.hidden = !SITUATIONS.length;
+  renderChecks();
+  renderPlan();
   renderFilters();
   select(fromHash() || (BY[DATA.formType] ? DATA.formType : FORMS[0].nodeType), false);
 })();

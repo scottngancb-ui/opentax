@@ -11,7 +11,8 @@ import { objectFields } from "./schema-fields.ts";
 import { NodeKind } from "./explore-trace.ts";
 import { renderAtlasHtml } from "./atlas-page.ts";
 import type { DocIndex } from "./form-docs.ts";
-import { docsFor } from "./form-docs.ts";
+import { docsFor, situationsFor } from "./form-docs.ts";
+import type { Situation } from "../../forms/f1040/2025/situations.ts";
 
 export enum EntryMode {
   // One entry per document received (W-2s, 1099s, ...).
@@ -49,6 +50,8 @@ export type AtlasData = {
   readonly taxYear: number;
   // Display order for topic groups.
   readonly topics: readonly string[];
+  // Taxpayer situations for the checklist, each naming documents and forms.
+  readonly situations: readonly Situation[];
   readonly forms: readonly AtlasForm[];
 };
 
@@ -114,12 +117,13 @@ function atlasForm(def: FormDefinition, nodeType: string, doc: NodeDoc | undefin
 }
 
 /** Every form in the definition, with its documentation, fields and connections. */
-export function buildAtlas(def: FormDefinition, docs: DocIndex): AtlasData {
+export function buildAtlas(def: FormDefinition, docs: DocIndex, situations: readonly Situation[] = []): AtlasData {
   const fedBy = fedByIndex(def.registry);
   return {
     formType: def.formType,
     taxYear: def.taxYear,
     topics: [...Object.values(Topic), UNDOCUMENTED_TOPIC],
+    situations: situations.filter((s) => s.documents.every((d) => d in def.registry)),
     forms: Object.keys(def.registry)
       .filter((t) => !HIDDEN.has(t))
       .map((t) => atlasForm(def, t, docs[t], fedBy[t] ?? [])),
@@ -146,7 +150,7 @@ export async function atlasCommand(args: AtlasArgs): Promise<{ output: string; f
   const def = catalog[key];
   const docs = docsFor(key);
   if (!def || !docs) throw new Error(`Unsupported form: ${key}`);
-  const data = buildAtlas(def, docs);
+  const data = buildAtlas(def, docs, situationsFor(key));
   const output = args.outputPath ?? join(".state", "explore", `${def.formType}-${def.taxYear}-forms.html`);
   await ensureDir(dirname(output));
   await Deno.writeTextFile(output, renderAtlasHtml(data));

@@ -3,7 +3,7 @@ import { catalog } from "../../catalog.ts";
 import { Topic } from "../../forms/f1040/nodes/doc.ts";
 import { atlasCommand, buildAtlas, EntryMode } from "./atlas.ts";
 import { renderAtlasHtml } from "./atlas-page.ts";
-import { docsFor } from "./form-docs.ts";
+import { docsFor, situationsFor } from "./form-docs.ts";
 import { NodeKind } from "./explore-trace.ts";
 
 const def = catalog["f1040:2025"];
@@ -64,6 +64,13 @@ Deno.test("buildAtlas falls back to the schema for forms without docs", () => {
   assert((w2?.fields.length ?? 0) > 0);
 });
 
+Deno.test("buildAtlas carries the situation checklist", () => {
+  const withSituations = buildAtlas(def, docs, situationsFor("f1040:2025"));
+  assert(withSituations.situations.length > 20);
+  assert(withSituations.situations.some((s) => s.id === "wages" && s.documents.includes("w2")));
+  assertEquals(atlas.situations, []);
+});
+
 Deno.test("renderAtlasHtml embeds the data without breaking out of the script tag", () => {
   const html = renderAtlasHtml({ ...atlas, forms: [{ ...atlas.forms[0], summary: "</script><b>x" }] });
   assertStringIncludes(html, '<script type="application/json" id="atlas-data">');
@@ -79,6 +86,7 @@ Deno.test("atlasCommand writes the atlas page", async () => {
     const html = await Deno.readTextFile(result.output);
     assertStringIncludes(html, "Forms Atlas");
     assertStringIncludes(html, '<dialog class="peek" id="peek"');
+    assertStringIncludes(html, '"id":"self_employed"');
   } finally {
     await Deno.remove(dir, { recursive: true });
   }

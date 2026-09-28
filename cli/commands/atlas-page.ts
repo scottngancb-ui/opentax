@@ -140,6 +140,32 @@ svg.flow-map { display: block; }
 .btn:hover { border-color: var(--ink-3); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .btn:focus-visible, .peek-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.planner { background: var(--surface); border: 1px solid var(--rule); padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.planner h2 { margin: 0; font: 600 26px/1.15 var(--cond); }
+.planner-lead { margin: 0; color: var(--ink-2); max-width: 75ch; }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 24px; align-items: start; }
+.check-group { border: 0; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+.check-group legend { padding: 0 0 6px; }
+.check { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; padding: 6px 4px; cursor: pointer; }
+.check:hover { background: var(--sunk); }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--accent); }
+.check-text { display: grid; gap: 1px; }
+.check-label { font-weight: 600; }
+.check-detail { font-size: 12px; color: var(--ink-2); }
+.check-docs { font: 11px var(--mono); color: var(--ink-3); }
+.plan { display: grid; gap: 16px; min-width: 0; border-top: 1px solid var(--rule); padding-top: 16px; }
+.plan-empty { margin: 0; color: var(--ink-3); }
+.plan-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.plan-count { margin: 0; font-size: 15px; }
+.plan-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.plan-h { margin: 0 0 4px; font: 600 13px/1.3 var(--cond); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.plan-note { margin: 0 0 8px; font-size: 12px; color: var(--ink-3); }
+.doc-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.doc-list li { border-bottom: 1px solid var(--rule); }
+.doc-row { width: 100%; border: 0; background: none; text-align: left; cursor: pointer; display: grid; grid-template-columns: 10px minmax(0, 1fr); column-gap: 10px; padding: 6px 4px; }
+.doc-row:hover { background: var(--sunk); }
+.doc-row:focus-visible, .check:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plan-map .map-wrap { max-height: 80vh; }
 footer { color: var(--ink-3); font-size: 12px; }
 kbd { font: 11px var(--mono); border: 1px solid var(--rule); padding: 0 4px; }
 `;
@@ -152,6 +178,13 @@ const MARKUP = `
     <p>Every form, schedule and worksheet in the engine: what it is for, what goes into it, and where its numbers go next. Pick a form to read about it, or search for a form number, a box or a word like "tips".</p>
     <div class="stats" id="stats"></div>
   </header>
+  <section class="planner" id="planner" aria-labelledby="planner-title">
+    <div class="eyebrow">Your situation</div>
+    <h2 id="planner-title">What applies to you</h2>
+    <p class="planner-lead">Check everything that happened in the tax year. The documents you need, the forms they flow into and a map of how they connect appear below.</p>
+    <div class="checks" id="checks"></div>
+    <div class="plan" id="plan" aria-live="polite"></div>
+  </section>
   <div class="atlas">
     <aside class="side" aria-label="Forms">
       <div class="side-head">
