@@ -364,6 +364,20 @@ ${LAYOUT_SCRIPT}
     if (t && t !== state.sel) openPeek(t, g);
   }
 
+  // ---------- page tabs ----------
+  function setPage(page) {
+    state.page = page === "browse" ? "browse" : "plan";
+    save("opentax-atlas-page", state.page);
+    document.querySelectorAll("[data-page]").forEach(function (b) {
+      var on = b.getAttribute("data-page") === state.page;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    document.getElementById("panel-plan").hidden = state.page !== "plan";
+    document.getElementById("panel-browse").hidden = state.page !== "browse";
+    if (state.page === "browse") revealInList();
+  }
+
   function select(t, push) {
     if (!BY[t]) return;
     state.sel = t;
@@ -507,12 +521,15 @@ ${LAYOUT_SCRIPT}
   document.addEventListener("click", function (ev) {
     var dlg = document.getElementById("peek");
     if (dlg && ev.target === dlg) return closePeek();
+    var pt = ev.target.closest("[data-page]");
+    if (pt) return setPage(pt.getAttribute("data-page"));
     var pk = ev.target.closest("[data-peek-open], [data-peek-close]");
     if (pk) {
       if (pk.hasAttribute("data-peek-close")) return closePeek();
       var target = pk.getAttribute("data-peek-open");
       peekFrom = null;
       closePeek();
+      setPage("browse");
       select(target, true);
       return document.getElementById("detail").scrollIntoView({ block: "start" });
     }
@@ -551,8 +568,9 @@ ${LAYOUT_SCRIPT}
       ev.preventDefault();
       return g.closest(".plan") ? openPeek(g.getAttribute("data-form"), g, null) : mapNodeActivated(g);
     }
-    if (ev.key === "/" && document.activeElement !== document.getElementById("q")) {
+    if (ev.key === "/" && document.activeElement !== document.getElementById("q") && !(ev.target.matches && ev.target.matches("input, textarea"))) {
       ev.preventDefault();
+      setPage("browse");
       document.getElementById("q").focus();
     }
   });
@@ -565,8 +583,8 @@ ${LAYOUT_SCRIPT}
   });
   var peekDlg = document.getElementById("peek");
   if (peekDlg) peekDlg.addEventListener("close", onPeekClosed);
-  window.addEventListener("popstate", function () { var t = fromHash(); if (t) select(t, false); });
-  window.addEventListener("hashchange", function () { var t = fromHash(); if (t && t !== state.sel) select(t, false); });
+  window.addEventListener("popstate", function () { var t = fromHash(); if (t) { setPage("browse"); select(t, false); } });
+  window.addEventListener("hashchange", function () { var t = fromHash(); if (t && t !== state.sel) { setPage("browse"); select(t, false); } });
 
   if (!FILTERS.some(function (f) { return f[0] === state.kind; })) state.kind = "all";
   if (state.tab !== "fields" && state.tab !== "map") state.tab = "fields";
@@ -574,9 +592,12 @@ ${LAYOUT_SCRIPT}
   renderStats();
   var planner = document.getElementById("planner");
   if (planner) planner.hidden = !SITUATIONS.length;
+  document.getElementById("ptab-plan").hidden = !SITUATIONS.length;
   renderChecks();
   renderPlan();
   renderFilters();
-  select(fromHash() || (BY[DATA.formType] ? DATA.formType : FORMS[0].nodeType), false);
+  var linked = fromHash();
+  select(linked || (BY[DATA.formType] ? DATA.formType : FORMS[0].nodeType), false);
+  setPage(linked ? "browse" : load("opentax-atlas-page", SITUATIONS.length ? "plan" : "browse"));
 })();
 `;
