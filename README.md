@@ -178,7 +178,9 @@ opentax return validate --returnId a1b2c3
 # This does not transmit a return or prove IRS acceptance.
 opentax return export --returnId a1b2c3 --type mef > return.xml
 
-# Write an interactive page showing how every line was derived
+# Write an interactive page showing how every line was derived.
+# Its "Your entries" tab edits the inputs and recalculates in the browser;
+# "Copy input.json" saves the edited entries as a benchmark-style case file.
 opentax return explore --returnId a1b2c3            # -> .state/returns/a1b2c3/explore.html
 opentax return explore --case benchmark/cases/f1040/2025/05-single-w2-interest-income
 

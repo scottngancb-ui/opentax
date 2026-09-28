@@ -57,10 +57,14 @@ jobs:
           grep -q "\"${VERSION}\"" cli/version.ts || { echo "Version injection failed"; exit 1; }
           echo "Building version ${VERSION}"
 
+      - name: Bundle explorer engine
+        run: deno task explore-engine
+
       - name: Compile
         run: >
           deno compile
           --allow-read --allow-write --allow-net --allow-env
+          --include cli/commands/explore-engine.js
           --target ${{ matrix.target }}
           --output ${{ matrix.asset }}
           cli/main.ts
