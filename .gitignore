@@ -8,6 +8,10 @@ testcases/
 .state/returns/
 .state/pdf-cache/
 .state/research/
+.state/explore/
+
+# Explorer engine bundle (built by `deno task explore-engine`)
+cli/commands/explore-engine.js
 
 # Benchmarking results
 benchmark/returns

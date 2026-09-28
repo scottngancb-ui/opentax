@@ -178,6 +178,12 @@ opentax return validate --returnId a1b2c3
 # This does not transmit a return or prove IRS acceptance.
 opentax return export --returnId a1b2c3 --type mef > return.xml
 
+# Write an interactive page showing how every line was derived.
+# Its "Your entries" tab edits the inputs and recalculates in the browser;
+# "Copy input.json" saves the edited entries as a benchmark-style case file.
+opentax return explore --returnId a1b2c3            # -> .state/returns/a1b2c3/explore.html
+opentax return explore --case benchmark/cases/f1040/2025/05-single-w2-interest-income
+
 # List entries in a return
 opentax form list --returnId a1b2c3
 
@@ -187,6 +193,10 @@ opentax form delete --returnId a1b2c3 --entryId w2_01
 
 # Inspect what fields a node expects
 opentax node inspect --node_type w2
+
+# Write a browsable reference of every form: what it is for, every field it
+# takes (with plain-language meanings), and which forms feed it and which it feeds
+opentax node explore                                # -> .state/explore/f1040-2025-forms.html
 
 # List all registered nodes
 opentax node list

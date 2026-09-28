@@ -11,9 +11,10 @@
     "@std/path": "jsr:@std/path"
   },
   "tasks": {
-    "tax": "deno run --allow-read --allow-write --allow-net=www.irs.gov cli/main.ts",
+    "tax": "deno run --allow-read --allow-write --allow-net=www.irs.gov --allow-run=deno cli/main.ts",
     "test": "deno test --allow-read --allow-write --allow-run=xmllint,deno --allow-net=www.irs.gov",
     "bench": "deno run --allow-read --allow-write --allow-run benchmark/run_benchmark.ts",
-    "compile": "deno compile --allow-read --allow-write --allow-net=www.irs.gov --output opentax cli/main.ts"
+    "explore-engine": "deno bundle --platform browser --minify -o cli/commands/explore-engine.js cli/commands/explore-browser.ts",
+    "compile": "deno task explore-engine && deno compile --allow-read --allow-write --allow-net=www.irs.gov --include cli/commands/explore-engine.js --output opentax cli/main.ts"
   }
 }
