@@ -10,6 +10,7 @@ import {
 } from "./commands/form.ts";
 import { graphViewCommand } from "./commands/graph.ts";
 import { nodeInspectCommand, nodeListCommand } from "./commands/node.ts";
+import { atlasCommand } from "./commands/atlas.ts";
 import { createReturnCommand, getReturnCommand } from "./commands/return.ts";
 import { exportMefCommand, exportPdfCommand } from "./commands/export.ts";
 import { exploreCommand } from "./commands/explore.ts";
@@ -53,6 +54,18 @@ const COMMANDS: readonly CommandDef[] = [
     usage: "opentax node list",
     handler: async (_args) => {
       await run(() => Promise.resolve(nodeListCommand()));
+    },
+  },
+  {
+    cmd: "node",
+    sub: "explore",
+    description: "Write an HTML reference of every form: what it is for, its fields, and how forms connect",
+    usage: "opentax node explore [--output <path>]",
+    options: [
+      { flag: "--output", description: "HTML file path (default: .state/explore/f1040-2025-forms.html)" },
+    ],
+    handler: async (args) => {
+      await run(() => atlasCommand({ outputPath: args.output }));
     },
   },
   {

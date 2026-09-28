@@ -1,0 +1,56 @@
+import { type NodeDoc, Topic } from "../../doc.ts";
+
+export const doc: NodeDoc = {
+  title: "Schedule K-1 (Form 1120-S)",
+  subtitle: "Shareholder's Share of Income, Deductions, Credits, etc.",
+  topic: Topic.PassThrough,
+  summary:
+    "The statement an S corporation gives each shareholder showing their share of the corporation's income, deductions and credits. " +
+    "Business, rental and royalty income go through Schedule E to Schedule 1 line 5, interest and dividends to Schedule B, capital gains to Schedule D, " +
+    "and qualified business income to Form 8995. Unlike partnership income, S corporation income is not subject to self-employment tax. Enter one K-1 per corporation.",
+  fields: {
+    corporation_name: "The name of the S corporation. Used as the payer name on Schedule B.",
+    box1_ordinary_business: "Box 1. Ordinary business income or loss. Reported on Schedule E and carried to Schedule 1 line 5; a loss is also sent to Form 7203 when basis data is entered.",
+    box2_rental_re: "Box 2. Net rental real estate income or loss. Reported on Schedule E and carried to Schedule 1 line 5.",
+    box3_other_rental: "Box 3. Other net rental income or loss. Reported on Schedule E and carried to Schedule 1 line 5.",
+    box4_interest: "Box 4. Interest income. Listed on Schedule B, Part I.",
+    box5a_ordinary_dividends: "Box 5a. Ordinary dividends. Listed on Schedule B, Part II.",
+    box5b_qualified_dividends: "Box 5b. Qualified dividends, taxed at capital gain rates. Goes to Form 1040 line 3a.",
+    box6_royalties: "Box 6. Royalties. Reported on Schedule E and carried to Schedule 1 line 5.",
+    box7_net_st_cap_gain: "Box 7. Net short-term capital gain or loss. Goes to Schedule D line 5.",
+    box8a_net_lt_cap_gain: "Box 8a. Net long-term capital gain or loss. Goes to Schedule D line 12.",
+    box8b_collectibles_gain: "Box 8b. Collectibles (28%) gain or loss. Sent to the 28% Rate Gain Worksheet.",
+    box8c_unrecaptured_1250: "Box 8c. Unrecaptured section 1250 gain, taxed at up to 25%. Sent to the Unrecaptured Section 1250 Gain Worksheet.",
+    box9_net_1231: "Box 9. Net section 1231 gain or loss from business property. Goes to Form 4797, Part I.",
+    box10_other_income: "Box 10. Other income or loss. The engine reports the total on Schedule 1 line 8z.",
+    box11_section_179: "Box 11. Your share of the section 179 expense deduction. Sent to Form 4562, where your own limits apply.",
+    box12_other_deductions: "Box 12. Other deductions passed through to you. The engine sends the total to Schedule A line 16 as an other itemized deduction.",
+    box15_amt_adjustment: "Box 15. Alternative minimum tax adjustments and preferences. The net amount goes to Form 6251.",
+    box16_tax_exempt_income: "Box 16. Tax-exempt income and nondeductible expenses. These affect your stock basis but are not taxed, so the engine does not route them.",
+    box17_distributions: "Distributions of cash and property the corporation made to you (box 16, code D on the current K-1). Not taxed while within your basis; not routed by the engine.",
+    box14_foreign_tax: "Foreign taxes paid or accrued on your share of income (now detailed on Schedule K-3). With foreign income and a category, sent to Form 1116.",
+    box14_foreign_income: "Gross foreign-source income tied to the foreign taxes. Needed for the Form 1116 limit.",
+    box14_foreign_income_category: "The foreign tax credit category (basket) the foreign income belongs to on Form 1116.",
+    box14_foreign_deductions: "Deductions directly allocable to the foreign income. Reduces foreign income on Form 1116.",
+    box17_w2_wages: "Older field for W-2 wages allocable to the business for the QBI deduction. Added to w2_wages.",
+    box17_ubia: "Older field for the unadjusted basis of qualified property (UBIA) for the QBI deduction. Added to ubia_qualified_property.",
+    qbi_amount: "Box 17, code V. Your qualified business income or loss for the section 199A deduction. If blank, a positive box 1 amount is used. Goes to Form 8995.",
+    w2_wages: "Box 17, code V. W-2 wages paid by the business, used in the QBI wage limitation.",
+    ubia_qualified_property: "Box 17, code V. Unadjusted basis immediately after acquisition of qualified property, used in the QBI property limitation.",
+    sstb_indicator: "Mark if the business is a specified service trade or business (such as health, law or consulting). Its QBI is reported separately because the deduction can be limited at higher incomes.",
+    stock_basis_beginning: "Your stock basis in the corporation at the start of the year. Sent to Form 7203 to test whether losses are deductible.",
+    debt_basis_beginning: "Your basis in loans you made to the corporation at the start of the year. Sent to Form 7203.",
+    pre2018_suspended_losses: "Losses from years before 2018 that were not allowed because of basis limits and are carried forward. Sent to Form 7203 as prior-year unallowed losses.",
+    pre2018_at_risk_suspended: "Losses from years before 2018 that were not allowed under the at-risk rules. Sent to Form 7203 as prior-year unallowed losses.",
+  },
+  options: {
+    box14_foreign_income_category: {
+      passive: "Passive category income, such as most interest, dividends, rents and royalties.",
+      general: "General category income, such as wages and active business income.",
+      section_951a: "Global intangible low-taxed income (GILTI) under section 951A.",
+      branch: "Foreign branch category income.",
+      treaty: "Income re-sourced as foreign under a tax treaty.",
+      section_901j: "Income from sanctioned countries under section 901(j).",
+    },
+  },
+};

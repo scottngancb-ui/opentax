@@ -194,6 +194,10 @@ opentax form delete --returnId a1b2c3 --entryId w2_01
 # Inspect what fields a node expects
 opentax node inspect --node_type w2
 
+# Write a browsable reference of every form: what it is for, every field it
+# takes (with plain-language meanings), and which forms feed it and which it feeds
+opentax node explore                                # -> .state/explore/f1040-2025-forms.html
+
 # List all registered nodes
 opentax node list
 ```

@@ -9,6 +9,8 @@ export const CLIENT_SCRIPT = `
 (function () {
   "use strict";
   var ORIG = JSON.parse(document.getElementById("trace-data").textContent);
+  var formsEl = document.getElementById("forms-data");
+  var FORM_DOCS = formsEl ? JSON.parse(formsEl.textContent) : {};
   var RESULT = ORIG.formType;
   var KEY = ORIG.formType + ":" + ORIG.taxYear;
   var data = ORIG;
@@ -140,6 +142,7 @@ export const CLIENT_SCRIPT = `
     qdcgtw: "QDCG tax worksheet", eitc: "EITC worksheet", agi_aggregator: "AGI aggregator", ssa1099: "SSA-1099",
     k1_partnership: "K-1 (partnership)", k1_s_corp: "K-1 (S corp)", k1_trust: "K-1 (trust)" };
   function nodeLabel(t) {
+    if (t !== "start" && FORM_DOCS[t]) return FORM_DOCS[t].title;
     if (NAMED[t]) return NAMED[t];
     var m;
     if ((m = /^f(1099|1098|1095)([a-z]*)$/.exec(t))) return m[1] + (m[2] ? "-" + m[2].toUpperCase() : "");
@@ -447,7 +450,10 @@ export const CLIENT_SCRIPT = `
     var info = M.byType[n];
     var kind = kindOf(n);
     var parts = ['<div class="focus-head"><div class="eyebrow">' + esc(kind === "computed" ? "Computed form or worksheet" : kind === "result" ? "Final return" : "Your entries") + "</div>" +
-      "<h3>" + esc(nodeLabel(n)) + '</h3><div class="meta"><span class="rawid">' + esc(n) + "</span></div></div>"];
+      "<h3>" + esc(nodeLabel(n)) + "</h3>" +
+      (FORM_DOCS[n] && FORM_DOCS[n].subtitle ? '<div class="d-sub">' + esc(FORM_DOCS[n].subtitle) + "</div>" : "") +
+      '<div class="meta"><span class="rawid">' + esc(n) + "</span></div>" +
+      (FORM_DOCS[n] ? '<p class="about">' + esc(FORM_DOCS[n].summary) + "</p>" : "") + "</div>"];
     if (!info.ran) parts.push('<div class="banner"><b>This form did not run.</b>' + (M.diag[n] || ["Its input did not pass validation."]).map(function (m) { return "<div>" + esc(m) + "</div>"; }).join("") + "</div>");
     else if (M.diag[n]) parts.push('<div class="banner"><b>This form failed.</b>' + M.diag[n].map(function (m) { return "<div>" + esc(m) + "</div>"; }).join("") + "</div>");
     if (n !== "start") parts.push('<div><div class="eyebrow">Received</div>' + kvTable(n, info.input, true) + "</div>");
@@ -526,6 +532,8 @@ export const CLIENT_SCRIPT = `
     return "json";
   }
   function defaultFor(fs) {
+    if (fs.list) return [];
+    if (fs.children) return {};
     if (fs.kind === "number") return 0;
     if (fs.kind === "boolean") return false;
     if (fs.kind === "enum") return fs.options[0];
@@ -547,7 +555,8 @@ export const CLIENT_SCRIPT = `
   }
   function fieldInput(i, k, v, editable) {
     var e = state.entries[i];
-    var fs = fieldSpecFor(e.nodeType, k) || { kind: inferKind(v) };
+    var spec = fieldSpecFor(e.nodeType, k);
+    var fs = !spec ? { kind: inferKind(v) } : spec.list || spec.children ? { kind: "json" } : spec;
     var id = "in-" + i + "-" + k;
     var attrs = ' id="' + esc(id) + '" data-entry="' + i + '" data-key="' + esc(k) + '" data-kind="' + fs.kind + '"' + (editable ? "" : " disabled");
     if (fs.kind === "boolean") return '<input type="checkbox"' + attrs + (v ? " checked" : "") + ">";

@@ -1,6 +1,6 @@
 // Browser-safe: no Deno APIs. This module is bundled into the explorer page so the
 // page can re-run the engine when entries are edited.
-import { z } from "zod";
+import type { z } from "zod";
 import { execute } from "../../core/runtime/executor.ts";
 import { buildExecutionPlan } from "../../core/runtime/planner.ts";
 import type { NodeRegistry } from "../../core/types/node-registry.ts";
@@ -8,6 +8,11 @@ import type { NodeContext } from "../../core/types/node-context.ts";
 import type { FormDefinition } from "../../core/types/form-definition.ts";
 import type { NodeResult } from "../../core/types/tax-node.ts";
 import { TaxNode } from "../../core/types/tax-node.ts";
+import type { FieldSpec } from "./schema-fields.ts";
+import { objectFields } from "./schema-fields.ts";
+
+export { FieldKind } from "./schema-fields.ts";
+export type { FieldSpec } from "./schema-fields.ts";
 
 export enum NodeKind {
   Start = "start",
@@ -16,13 +21,6 @@ export enum NodeKind {
   Result = "result",
 }
 
-export enum FieldKind {
-  Number = "number",
-  Boolean = "boolean",
-  Enum = "enum",
-  Text = "text",
-  Json = "json",
-}
 
 // The engine pieces a trace needs; FormDefinition minus the exporters.
 export type TraceEngine = Pick<FormDefinition, "formType" | "taxYear" | "inputNodes" | "registry">;
@@ -68,12 +66,6 @@ export type ExplorerData = TraceLabels & {
   readonly diagnostics: readonly { readonly nodeType: string; readonly message: string }[];
 };
 
-export type FieldSpec = {
-  readonly key: string;
-  readonly kind: FieldKind;
-  readonly required: boolean;
-  readonly options?: readonly string[];
-};
 
 export type InputSpec = {
   readonly nodeType: string;
@@ -222,43 +214,6 @@ export function traceReturn(
     result: result.pending[engine.formType] ?? {},
     diagnostics: result.diagnostics.map((d) => ({ nodeType: d.nodeType, message: d.message })),
   };
-}
-
-function unwrap(schema: z.ZodTypeAny): z.ZodTypeAny {
-  if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) return unwrap(schema.unwrap());
-  if (schema instanceof z.ZodDefault) return unwrap(schema.removeDefault());
-  if (schema instanceof z.ZodEffects) return unwrap(schema.innerType());
-  return schema;
-}
-
-function enumOptions(schema: z.ZodTypeAny): string[] | undefined {
-  if (schema instanceof z.ZodEnum) return [...schema.options];
-  if (schema instanceof z.ZodNativeEnum) {
-    return Object.values(schema.enum as Record<string, unknown>).filter((v): v is string => typeof v === "string");
-  }
-  if (schema instanceof z.ZodLiteral && typeof schema.value === "string") return [schema.value];
-  return undefined;
-}
-
-function fieldKind(schema: z.ZodTypeAny): FieldKind {
-  if (schema instanceof z.ZodNumber) return FieldKind.Number;
-  if (schema instanceof z.ZodBoolean) return FieldKind.Boolean;
-  if (enumOptions(schema)) return FieldKind.Enum;
-  if (schema instanceof z.ZodString) return FieldKind.Text;
-  return FieldKind.Json;
-}
-
-function fieldSpec(key: string, schema: z.ZodTypeAny): FieldSpec {
-  const inner = unwrap(schema);
-  const options = enumOptions(inner);
-  return { key, kind: fieldKind(inner), required: !schema.isOptional(), ...(options ? { options } : {}) };
-}
-
-function objectFields(schema: z.ZodTypeAny): FieldSpec[] {
-  const inner = unwrap(schema);
-  if (!(inner instanceof z.ZodObject)) return [];
-  const shape: Record<string, z.ZodTypeAny> = inner.shape;
-  return Object.entries(shape).map(([key, value]) => fieldSpec(key, value));
 }
 
 /** Describes every input document's fields so the page can build an editor for them. */

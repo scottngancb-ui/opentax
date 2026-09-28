@@ -8,6 +8,7 @@ import type { Entry, ExplorerData } from "./explore-trace.ts";
 import { startEntries, traceReturn } from "./explore-trace.ts";
 import { renderExplorerHtml } from "./explore-page.ts";
 import { loadEngineBundle } from "./explore-bundle.ts";
+import { docsFor, formBlurbs } from "./form-docs.ts";
 
 export { NodeKind, traceReturn } from "./explore-trace.ts";
 export type { Entry, ExplorerData } from "./explore-trace.ts";
@@ -97,6 +98,7 @@ export async function exploreCommand(
   const output = args.outputPath ?? defaultOutputPath(args);
   await ensureDir(dirname(output));
   const engine = await loadEngineBundle();
-  await Deno.writeTextFile(output, renderExplorerHtml(data, engine));
+  const docs = docsFor(`${data.formType}:${data.taxYear}`);
+  await Deno.writeTextFile(output, renderExplorerHtml(data, { engine, forms: docs ? formBlurbs(docs) : {} }));
   return { output, nodes: data.steps.length + data.unrun.length, editable: engine !== undefined };
 }

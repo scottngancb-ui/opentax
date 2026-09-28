@@ -122,15 +122,15 @@ Deno.test("renderExplorerHtml embeds data without breaking out of the script tag
   const data = traceReturn(def, singleW2Entries(), { title: "</script><b>x", subtitle: "" });
   const html = renderExplorerHtml(data);
   assertStringIncludes(html, '<script type="application/json" id="trace-data">');
-  assertEquals(html.split("</script>").length - 1, 2);
+  assertEquals(html.split("</script>").length - 1, 3);
   assertStringIncludes(html, "<title>&lt;/script>&lt;b>x · Return explorer</title>");
 });
 
 Deno.test("renderExplorerHtml embeds the engine as a module that cannot close its script tag", () => {
   const data = traceReturn(def, singleW2Entries(), labels);
-  const html = renderExplorerHtml(data, 'const s = "</script>"; globalThis.x = s;');
+  const html = renderExplorerHtml(data, { engine: 'const s = "</script>"; globalThis.x = s;' });
   assertStringIncludes(html, '<script type="module">const s = "<\\/script>";');
-  assertEquals(html.split("</script>").length - 1, 3);
+  assertEquals(html.split("</script>").length - 1, 4);
 });
 
 Deno.test("loadEngineBundle bundles the in-browser engine from source", async () => {

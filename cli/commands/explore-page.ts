@@ -1,94 +1,12 @@
 import type { ExplorerData } from "./explore-trace.ts";
+import type { FormBlurb } from "./form-docs.ts";
 import { CLIENT_SCRIPT } from "./explore-client.ts";
+import { FONTS, THEME_CSS } from "./page-theme.ts";
 
 // The page is one self-contained file: styles, script, the trace data and (optionally)
 // the bundled engine are all inline.
 
-const FONTS =
-  '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-  '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">';
-
 const STYLE = `
-:root {
-  --paper: #f3f6f5;
-  --surface: #ffffff;
-  --sunk: #e9efed;
-  --ink: #14201c;
-  --ink-2: #4b5c56;
-  --ink-3: #7a8a84;
-  --rule: #d3ddd9;
-  --accent: #0b6e5a;
-  --accent-soft: #dcefe8;
-  --entry: #94570a;
-  --entry-soft: #f6e8d2;
-  --result-bg: #14201c;
-  --result-ink: #f3f6f5;
-  --ok: #1d7a3b;
-  --bad: #b42318;
-  --bad-soft: #fbe4e1;
-  --edge: #b9c7c2;
-  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --cond: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --paper: #0e1412;
-    --surface: #151d1a;
-    --sunk: #1b2622;
-    --ink: #e2ebe7;
-    --ink-2: #a3b5ae;
-    --ink-3: #72847d;
-    --rule: #2a3632;
-    --accent: #4cc2a0;
-    --accent-soft: #173a31;
-    --entry: #e3ab57;
-    --entry-soft: #3a2b14;
-    --result-bg: #e2ebe7;
-    --result-ink: #0e1412;
-    --ok: #5fcf85;
-    --bad: #f07b6e;
-    --bad-soft: #3d1a17;
-    --edge: #3a4a44;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --paper: #0e1412;
-  --surface: #151d1a;
-  --sunk: #1b2622;
-  --ink: #e2ebe7;
-  --ink-2: #a3b5ae;
-  --ink-3: #72847d;
-  --rule: #2a3632;
-  --accent: #4cc2a0;
-  --accent-soft: #173a31;
-  --entry: #e3ab57;
-  --entry-soft: #3a2b14;
-  --result-bg: #e2ebe7;
-  --result-ink: #0e1412;
-  --ok: #5fcf85;
-  --bad: #f07b6e;
-  --bad-soft: #3d1a17;
-  --edge: #3a4a44;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; }
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font: 14px/1.5 var(--sans);
-  padding-inline: 16px;
-  padding-block: 20px 48px;
-}
-.wrap { max-width: 1360px; margin: 0 auto; display: grid; gap: 20px; }
-button { font: inherit; color: inherit; }
-button:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.eyebrow { font: 600 11px/1.2 var(--cond); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-
 header.top { display: grid; gap: 6px; }
 header.top h1 { margin: 0; font: 600 26px/1.15 var(--cond); text-wrap: balance; }
 header.top p { margin: 0; color: var(--ink-2); max-width: 90ch; }
@@ -157,6 +75,8 @@ svg.flow .arrow-on { fill: var(--accent); }
 .focus-head { display: grid; gap: 4px; }
 .focus-head .big { font: 500 28px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
 .focus-head h3 { margin: 0; font: 600 18px/1.25 var(--cond); }
+.focus-head .d-sub { color: var(--ink-2); }
+.focus-head .about { margin: 6px 0 0; max-width: 70ch; line-height: 1.55; }
 .meta { color: var(--ink-2); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .rawid { font: 12px var(--mono); color: var(--ink-3); overflow-wrap: anywhere; }
 .chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--rule); background: var(--sunk); padding: 0 7px; font: 500 12px/20px var(--cond); cursor: pointer; white-space: nowrap; }
@@ -290,7 +210,7 @@ const MARKUP = `
 `;
 
 // JSON inside <script> must not contain "</script" or line separators that end the string.
-function embedJson(data: ExplorerData): string {
+function embedJson(data: unknown): string {
   return JSON.stringify(data)
     .replace(/</g, "\\u003c")
     .replace(/\u2028/g, "\\u2028")
@@ -305,28 +225,36 @@ function pageTitle(data: ExplorerData): string {
   return `<title>${escapeText(data.title)} · Return explorer</title>`;
 }
 
+export type PageExtras = {
+  // The bundled in-browser engine; without it the page is read-only.
+  readonly engine?: string;
+  // Titles and summaries by node type, shown in the inspector.
+  readonly forms?: Readonly<Record<string, FormBlurb>>;
+};
+
 // A module script runs after the classic app script, then announces itself.
 function engineScript(engine: string | undefined): string {
   if (!engine) return "";
   return `<script type="module">${engine.replace(/<\/(script)/gi, "<\\/$1")}</script>`;
 }
 
-function bodyContent(data: ExplorerData, engine: string | undefined): string {
+function bodyContent(data: ExplorerData, extras: PageExtras): string {
   return MARKUP +
     `<script type="application/json" id="trace-data">${embedJson(data)}</script>` +
+    `<script type="application/json" id="forms-data">${embedJson(extras.forms ?? {})}</script>` +
     `<script>${CLIENT_SCRIPT}</script>` +
-    engineScript(engine);
+    engineScript(extras.engine);
 }
 
 /** Page content without the document skeleton, for hosts that supply their own. */
-export function renderExplorerFragment(data: ExplorerData, engine?: string): string {
-  return pageTitle(data) + FONTS + `<style>${STYLE}</style>` + bodyContent(data, engine);
+export function renderExplorerFragment(data: ExplorerData, extras: PageExtras = {}): string {
+  return pageTitle(data) + FONTS + `<style>${THEME_CSS}${STYLE}</style>` + bodyContent(data, extras);
 }
 
 /** A complete standalone HTML document. Pass the engine bundle to enable editing. */
-export function renderExplorerHtml(data: ExplorerData, engine?: string): string {
+export function renderExplorerHtml(data: ExplorerData, extras: PageExtras = {}): string {
   return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">" +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
-    pageTitle(data) + FONTS + `<style>${STYLE}</style></head><body>` +
-    bodyContent(data, engine) + "</body></html>\n";
+    pageTitle(data) + FONTS + `<style>${THEME_CSS}${STYLE}</style></head><body>` +
+    bodyContent(data, extras) + "</body></html>\n";
 }
